@@ -9,13 +9,25 @@ import matplotlib.pyplot as plt
 import gym
 import wandb 
 
-class QLearningAgent(EpsilonGreedyAgent):
-
+class ExpGreedySarsaAgent(EpsilonGreedyAgent):
+    """
+    Greedy Policy is (1-epsilon) with best action, and epsilon with random action 
+    """
     def get_value(self, state):
+        possible_actions = self.get_legal_actions(state)
+        if len(possible_actions) == 0:
+            return None 
+        elif len(possible_actions) == 1:
+            return self.get_qvalue(state, possible_actions[0])
         best_action = self.get_best_action(state)
-        if best_action is not None:
-            return self.get_qvalue(state, best_action)
-        return None 
+        other_action_value = 0
+        for action in possible_actions:
+            if action == best_action:
+                continue
+            other_action_value += self.get_qvalue(state, action)
+        random_action = np.random.choice(possible_actions)
+        value = (1 - self.epsilon) * self.get_qvalue(state, best_action) + self.epsilon / (len(possible_actions) - 1) * self.get_qvalue(state, random_action)
+        return value
     
 
 def train_one_epoch(env, agent, t_max=10**4):
@@ -35,7 +47,7 @@ def main(env, args):
     np.random.seed(args.seed)
     n_actions = env.action_space.n
     get_legal_actions = lambda s: range(n_actions)
-    agent = QLearningAgent(args.alpha, args.epsilon, args.gamma, get_legal_actions)
+    agent = ExpGreedySarsaAgent(args.alpha, args.epsilon, args.gamma, get_legal_actions)
     rewards = []
     for i in range(1000):
         reward = train_one_epoch(env, agent)
@@ -62,6 +74,6 @@ if __name__ == "__main__":
     env = gym.make("Taxi-v3")
     wandb.finish()
     wandb.init(project="Q-Learning", config=args)
-    wandb.run.name = f'run_Q_learning_iteration_alpha={args.alpha}_epsilon={args.epsilon}_gamma={args.gamma}'
+    wandb.run.name = f'run_expected_sarsa_greedy_policy_alpha={args.alpha}_epsilon={args.epsilon}_gamma={args.gamma}'
     main(env, args)
     wandb.finish()

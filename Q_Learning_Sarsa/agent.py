@@ -82,7 +82,7 @@ class SoftmaxAgent(Agent):
 
     def stable_softmax(self, x):
         x = x - x.max()
-        e_x = x.exp()
+        e_x = np.exp(x)
         return e_x / e_x.sum()
     
     def get_action(self, state):

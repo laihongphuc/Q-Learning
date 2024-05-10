@@ -9,13 +9,18 @@ import matplotlib.pyplot as plt
 import gym
 import wandb 
 
-class QLearningAgent(EpsilonGreedyAgent):
-
+class ExpSoftmaxSarsaAgent(SoftmaxAgent):
+    """
+    Greedy Policy is (1-epsilon) with best action, and epsilon with random action 
+    """
     def get_value(self, state):
-        best_action = self.get_best_action(state)
-        if best_action is not None:
-            return self.get_qvalue(state, best_action)
-        return None 
+        possible_actions = self.get_legal_actions(state)
+        if len(possible_actions) == 0:
+            return None 
+        q_value_list = np.array([self.get_qvalue(state, action) for action in possible_actions])
+        prob = self.stable_softmax(q_value_list / self.tau)
+        value = np.sum(q_value_list * prob)
+        return value
     
 
 def train_one_epoch(env, agent, t_max=10**4):
@@ -35,16 +40,15 @@ def main(env, args):
     np.random.seed(args.seed)
     n_actions = env.action_space.n
     get_legal_actions = lambda s: range(n_actions)
-    agent = QLearningAgent(args.alpha, args.epsilon, args.gamma, get_legal_actions)
+    agent = ExpSoftmaxSarsaAgent(args.alpha, args.tau, args.gamma, get_legal_actions)
     rewards = []
     for i in range(1000):
         reward = train_one_epoch(env, agent)
         wandb.log({"Taxi-v3/Reward": reward})
         rewards.append(reward)
         # reduce epsilon overtime
-        agent.epsilon *= 0.99 
         if i % 10 == 0:
-            print(f"Episode {i}: epsilon = {agent.epsilon}, reward = {np.mean(rewards[-10:])}")
+            print(f"Episode {i}: reward = {np.mean(rewards[-10:])}")
     
 
 
@@ -56,12 +60,12 @@ if __name__ == "__main__":
     parser.add_argument("--seed", default=None, type=int, help="Random seed.")
     # For these and any other arguments you add, ReCodEx will keep your default value.
     parser.add_argument("--alpha", default=..., type=float, help="Learning rate.")
-    parser.add_argument("--epsilon", default=..., type=float, help="Exploration factor.")
+    parser.add_argument("--tau", default=..., type=float, help="Softmax temperature.")
     parser.add_argument("--gamma", default=..., type=float, help="Discounting factor.")
     args = parser.parse_args()
     env = gym.make("Taxi-v3")
     wandb.finish()
     wandb.init(project="Q-Learning", config=args)
-    wandb.run.name = f'run_Q_learning_iteration_alpha={args.alpha}_epsilon={args.epsilon}_gamma={args.gamma}'
+    wandb.run.name = f'run_expected_sarsa_softmax_policy_alpha={args.alpha}_tau={args.tau}_gamma={args.gamma}'
     main(env, args)
     wandb.finish()
